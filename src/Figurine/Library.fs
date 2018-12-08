@@ -92,11 +92,12 @@ module Functions =
     open Types
     open Newtonsoft.Json.Linq
 
-    let (|JsonString|_|) (desired: string) (expected: JToken) =
+    let private (|JsonString|_|) (desired: string) (expected: JToken) =
         if expected.Type = JTokenType.String && string expected = desired
         then Some ()
         else None
 
+    /// execute the given script (along with provided arguments) on the current page
     let js script args (d: BrowserCtx) =
         d.page.SetJavaScriptEnabledAsync true
         |> Task.forceUnit
@@ -107,6 +108,7 @@ module Functions =
 
     let private sleepSpan = TimeSpan.FromSeconds 0.5
 
+    /// wait on this page until the condition holds
     let waitFor (condition: unit -> bool) (d: BrowserCtx) =
         let sw = System.Diagnostics.Stopwatch.StartNew()
         let rec wait span =
@@ -119,34 +121,46 @@ module Functions =
         wait d.compareTimeout
         sw.Stop ()
 
+    /// try to find an element on the page that matches the given selector
     let findSelector selector (d: BrowserCtx) =
         fun () -> d.page.QuerySelectorAsync selector
         |> Task.withTimeout d.compareTimeout
         |> Task.force
         |> Option.ofObj
 
+    /// find all elements on the page that match the given selector
     let findManySelector selector (d: BrowserCtx) =
         fun () -> d.page.QuerySelectorAllAsync selector
         |> Task.withTimeout d.compareTimeout
         |> Task.force
 
-    let url u (d: BrowserCtx) =
-        fun () -> d.page.GoToAsync u
-        |> Task.withTimeout d.navigateTimeout
-        |> Task.force
-        |> Response.check
-
+    /// retrieve the current URL for the page
     let currentUrl (d: BrowserCtx) =
         d.page.Url
 
+    /// navigate the page to the given URL
+    let url u (d: BrowserCtx) =
+        if currentUrl d = u then ()
+        else
+            fun () -> d.page.GoToAsync u
+            |> Task.withTimeout d.navigateTimeout
+            |> Task.force
+            |> Response.check
+
+    /// write the provided text to the element
     let write (text: string) (element: ElementHandle) (d: BrowserCtx) =
         fun () -> element.TypeAsync(text)
         |> Task.withTimeoutUnit d.compareTimeout
         |> Task.force
 
+    /// click the provided element with the left mouse button
     let click (element: ElementHandle) =
         element.ClickAsync(Input.ClickOptions()) |> Task.forceUnit
 
+    /// read the inner value from the element.
+    /// if the element is an input or text, the `value` is read
+    /// if the element is a `select`, the `innerText` of the selected `option` is read (TODO: handle multiselect)
+    /// for all other elements, the `innerText` is read
     let read (element: ElementHandle) (d: BrowserCtx) =
         match Handle.className element with
         | JsonString "HTMLInputElement"
