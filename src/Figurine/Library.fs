@@ -86,7 +86,7 @@ module Browser =
           navigateTimeout = TimeSpan.FromSeconds 30. }
 
     let createFromExe (path: string) =
-        create (Launch (LaunchOptions(ExecutablePath = path, Headless = false)))
+        create (Launch (LaunchOptions(ExecutablePath = path)))
 
 module Functions =
     open Types
@@ -97,9 +97,27 @@ module Functions =
         then Some ()
         else None
 
-    let js script (d: BrowserCtx) = failwith "boom"
-    let puts text (d: BrowserCtx) = failwith "boom"
-    let waitFor condition (d: BrowserCtx) = failwith "boom"
+    let js script args (d: BrowserCtx) =
+        d.page.SetJavaScriptEnabledAsync true
+        |> Task.forceUnit
+
+        fun () -> d.page.EvaluateFunctionAsync(script, args)
+        |> Task.withTimeout d.compareTimeout
+        |> Task.force
+
+    let private sleepSpan = TimeSpan.FromSeconds 0.5
+
+    let waitFor (condition: unit -> bool) (d: BrowserCtx) =
+        let sw = System.Diagnostics.Stopwatch.StartNew()
+        let rec wait span =
+            if sw.Elapsed >= span then failwith "Timed out checking for condition"
+            if condition ()
+            then ()
+            else
+                System.Threading.Thread.Sleep sleepSpan
+                wait (span - sleepSpan)
+        wait d.compareTimeout
+        sw.Stop ()
 
     let findSelector selector (d: BrowserCtx) =
         fun () -> d.page.QuerySelectorAsync selector
@@ -118,10 +136,16 @@ module Functions =
         |> Task.force
         |> Response.check
 
+    let currentUrl (d: BrowserCtx) =
+        d.page.Url
+
     let write (text: string) (element: ElementHandle) (d: BrowserCtx) =
         fun () -> element.TypeAsync(text)
         |> Task.withTimeoutUnit d.compareTimeout
         |> Task.force
+
+    let click (element: ElementHandle) =
+        element.ClickAsync(Input.ClickOptions()) |> Task.forceUnit
 
     let read (element: ElementHandle) (d: BrowserCtx) =
         match Handle.className element with

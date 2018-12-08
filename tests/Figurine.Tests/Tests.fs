@@ -9,6 +9,8 @@ open PuppeteerSharp
 
 let chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 let googleHomePage = "https://www.google.com/"
+let wikipedia = "https://www.wikipedia.org"
+let germanWikipediaDefault = "https://de.wikipedia.org/wiki/Wikipedia:Hauptseite"
 
 [<Tests>]
 let tests =
@@ -24,7 +26,6 @@ let tests =
     // pending because the input element on google's search page doesn't show the typed value in the innerText
     testCase "Can manipulate element via selector" <| fun () ->
         use ctx = Browser.createFromExe chromePath
-        let wikipedia = "https://www.wikipedia.org"
 
         url wikipedia ctx
 
@@ -46,4 +47,18 @@ let tests =
 
         Expect.isGreaterThan elements.Length 0 "should have found some elements on the page"
 
+    testCase "Can use waitFor to wait for page transitions" <| fun () ->
+        use ctx = Browser.createFromExe chromePath
+
+        url wikipedia ctx
+
+        let germanLink = findSelector "a[id=js-link-box-de]" ctx
+
+        async {
+            do! Async.Sleep 2000
+            click germanLink.Value
+        }
+        |> Async.Start
+
+        waitFor (fun () -> currentUrl ctx = germanWikipediaDefault) ctx
   ]
