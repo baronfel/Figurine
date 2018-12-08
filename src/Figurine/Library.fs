@@ -49,7 +49,7 @@ module Browser =
           navigateTimeout = TimeSpan.FromSeconds 30. }
 
     let createFromExe (path: string) =
-        create (Launch (LaunchOptions(ExecutablePath = path, Headless = false)))
+        create (Launch (LaunchOptions(ExecutablePath = path)))
 
 module Functions =
     open Types
